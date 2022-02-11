@@ -1,0 +1,79 @@
+//Config WiFi
+#ifndef STASSID
+#define STASSID "xxxx"
+#define STAPSK  "xxxx"
+#endif
+
+WiFiClient espClient;
+
+const char* ssid = STASSID;
+const char* password = STAPSK;
+const int checkWiFiTimeout = 15;
+int onlineMode = 1;
+
+//Config ArduinoOTA
+const char* otaHostname = "OpenSA";
+const char* otaPassword = "xxxx";
+
+//Config MQTT
+PubSubClient mqttCore(espClient);
+int mqttServiceState = 1;
+int checkMqttTimeout = 15;
+const char *mqttBroker = "broker.emqx.io";
+const int mqttPort = 1883;
+const char *mqttUsername = "emqx";
+const char *mqttPassword = "public";
+struct {
+    const char *main = "xxx/#";
+    const char *hello = "xxx/h";
+    const char *relay0 = "xxx/r/0";
+    const char *relay0Start = "xxx/r/0/s";
+    const char *relay0End = "xxx/r/0/e";
+    const char *relay1 = "xxx/r/1";
+    const char *commands = "xxx/cmd";
+} topic;
+
+
+//Config WebServer
+ESP8266WebServer server;
+
+//Config RELAY
+const int relays = 2;
+const int pinRelay[relays] = {
+    14, //relay0
+    12, //relay1
+};
+bool stateRelay[relays];
+
+//millis - time to wait for
+unsigned long nowMillis = millis();
+unsigned long lastCheck;
+unsigned long lastCheckWifi;
+unsigned long lastCheckMqtt;
+unsigned long forceOnStart;
+
+//Config NTP
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
+
+//Config RTC
+RTC_DS1307 rtc;
+char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+int myTimezone = 7;
+DateTime now = DateTime();
+
+//Config SmartBtn
+bool stateForceOn = 0;
+int forceOnTimeout = 30; //minutes
+const int pinSmartBtn = 13;
+OneButton smartBtn(pinSmartBtn, true);
+
+//Config EEPROM
+struct dataEEPROM {
+    bool relayState[relays] = {0,0};
+    int relay0HoursStart = 17;
+    int relay0HoursEnd = 23;
+    int test = 1;
+    int checkInterval = 1; //seconds
+} myDataEEPROM;
+const int eepromSize = 512;
