@@ -20,7 +20,11 @@ OpenSA is a Aquascape management device.
 - NTP
 - EEPROM Storage
 - 2 Channel AC (relay)
+- Temperature Monitor
+
+
 ### Channel Configuration
+
 1. Lamp Controll
    - Schadule
    - Force On with Timer
@@ -30,11 +34,12 @@ OpenSA is a Aquascape management device.
 ### Prepare Hardware Supported
 - ESP8266
 - RTC DS1307
+- DS18B20 Temperature Sensor
 - 1 Push Button
 - Relay module 2 channel
 - 2 Female Plug AC
 - Some AC Wire
-- Some Jumper
+- Some Jumper Wire
 
 ### Wiring
 - Coming Soon

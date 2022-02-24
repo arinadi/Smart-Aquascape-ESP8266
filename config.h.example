@@ -8,7 +8,8 @@ WiFiClient espClient;
 
 const char* ssid = STASSID;
 const char* password = STAPSK;
-const int checkWiFiTimeout = 15;
+const int checkWiFiTimeout = 15; //seconds
+const int checkWiFiReconnect = 60; //minutes // reconnect after offlineMode
 int onlineMode = 1;
 
 //Config ArduinoOTA
@@ -30,7 +31,11 @@ struct {
     const char *relay0Start = "xxx/r/0/s";
     const char *relay0End = "xxx/r/0/e";
     const char *relay1 = "xxx/r/1";
+    const char *forceOnTimeout = "xxx/fot";
     const char *commands = "xxx/cmd";
+    const char *temperatureData = "xxx/t/d";
+    const char *temperatureInterval = "xxx/t/i";
+    const char *temperatureMonitor = "xxx/t/m";
 } topic;
 
 
@@ -47,10 +52,13 @@ bool stateRelay[relays];
 
 //millis - time to wait for
 unsigned long nowMillis = millis();
-unsigned long lastCheck;
+unsigned long lastCheckSchedule;
 unsigned long lastCheckWifi;
 unsigned long lastCheckMqtt;
+unsigned long lastCheckTemperature;
 unsigned long forceOnStart;
+unsigned long nextWiFiReconnect;
+
 
 //Config NTP
 WiFiUDP ntpUDP;
@@ -64,9 +72,16 @@ DateTime now = DateTime();
 
 //Config SmartBtn
 bool stateForceOn = 0;
-int forceOnTimeout = 30; //minutes
 const int pinSmartBtn = 13;
 OneButton smartBtn(pinSmartBtn, true);
+
+// Config Temperature DS18B20 sensor
+const int pinTemperature = 2;
+OneWire wireTemperature(pinTemperature);// Setup a oneWire instance to communicate with any OneWire devices
+DallasTemperature sensorTemperature(&wireTemperature); // Pass our oneWire reference to Dallas Temperature sensor
+
+// Config Buzzer
+const int pinBuzzer = 15;
 
 //Config EEPROM
 struct dataEEPROM {
@@ -74,6 +89,9 @@ struct dataEEPROM {
     int relay0HoursStart = 17;
     int relay0HoursEnd = 23;
     int test = 1;
-    int checkInterval = 1; //seconds
+    int checkScheduleInterval = 1; //seconds
+    int forceOnTimeout = 30; //minute
+    bool temperatureMonitor = true;
+    int temperatureInterval = 1; //second
 } myDataEEPROM;
 const int eepromSize = 512;

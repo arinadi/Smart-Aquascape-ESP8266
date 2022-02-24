@@ -8,6 +8,8 @@
 #include <PubSubClient.h>
 #include <ESP8266WebServer.h>
 #include "OneButton.h"
+#include <OneWire.h>
+#include <DallasTemperature.h>
 
 //Config File (connectifity and pinout)
 #include "config.h"
@@ -23,11 +25,14 @@ void setup()
   //init EEPROM
   initEEPROM();
 
+  //init buzzer
+  makeTone(523, 500);
+
   //init relay
   initRelay();
 
   //init led
-  pinMode(LED_BUILTIN, OUTPUT);
+  // pinMode(LED_BUILTIN, OUTPUT);
 
   //init SmartBtn
   initSmartBtn();
@@ -37,6 +42,9 @@ void setup()
 
   //init RTC
   initRTC();
+
+  // Init DS18B20
+  sensorTemperature.begin();
 
   if (onlineMode == 1)
   {
@@ -203,6 +211,7 @@ void toggledRelay(int index, int state)
     Serial.print(" State ");
     Serial.print(myDataEEPROM.relayState[i]);
     Serial.println("");
+    makeTone(659, 1000);
   }
 }
 
@@ -333,6 +342,17 @@ DateTime checkRTC()
   return now;
 }
 
+void checkSchedule()
+{
+  if (nowMillis - lastCheckSchedule > myDataEEPROM.checkScheduleInterval * 1000) //Check every seconds
+  {
+    lastCheckSchedule = nowMillis;
+    now = checkRTC();
+    //lampController or relay0
+    lampController();
+  }
+}
+
 void initWifi()
 {
   // We start by connecting to a WiFi network
@@ -345,6 +365,12 @@ void initWifi()
 
 void checkWiFi()
 {
+  if (onlineMode == 0 && nowMillis - lastCheckWifi > nextWiFiReconnect)
+  {
+    onlineMode = 1;
+    nextWiFiReconnect = checkWiFiReconnect * 1000 * 60;
+  }
+  
   if (onlineMode == 1)
   {
     if (WiFi.status() != WL_CONNECTED)
@@ -358,10 +384,10 @@ void checkWiFi()
     {
       nowMillis = millis();
       Serial.print(".");
-      digitalWrite(LED_BUILTIN, LOW);
-      delay(500);
-      digitalWrite(LED_BUILTIN, HIGH);
-      delay(500);
+      // digitalWrite(LED_BUILTIN, LOW);
+      // delay(500);
+      // digitalWrite(LED_BUILTIN, HIGH);
+      // delay(500);
       if (nowMillis - lastCheckWifi > checkWiFiTimeout * 1000)
       {
         offlineMode();
@@ -374,7 +400,7 @@ void checkWiFi()
 void offlineMode()
 {
   onlineMode = 0;
-  WiFi.mode(WIFI_OFF);
+  makeTone(1046, 2000);
 }
 
 void initMqtt()
@@ -393,7 +419,7 @@ void checkMqtt()
     while (!mqttCore.connected())
     {
       nowMillis = millis();
-      digitalWrite(LED_BUILTIN, LOW);
+      // digitalWrite(LED_BUILTIN, LOW);
       String client_id = "OpenSA-client-";
       client_id += String(WiFi.macAddress());
       Serial.printf("The client %s connects to the public mqtt broker\n", client_id.c_str());
@@ -412,9 +438,10 @@ void checkMqtt()
       {
         Serial.print("failed with state ");
         Serial.print(mqttCore.state());
+        makeTone(1046, 2000);
         delay(1000);
       }
-      digitalWrite(LED_BUILTIN, HIGH);
+      // digitalWrite(LED_BUILTIN, HIGH);
       Serial.print(".");
       delay(1000);
       if (nowMillis - lastCheckMqtt > checkMqttTimeout * 1000)
@@ -427,6 +454,13 @@ void checkMqtt()
   }
 }
 
+void publishMqtt(const char *topic, const char *message)
+{
+  if (mqttServiceState == 1)
+  {
+    mqttCore.publish(topic, message);
+  }
+}
 void publishDeviceConfig()
 {
   if (mqttServiceState == 1)
@@ -437,6 +471,8 @@ void publishDeviceConfig()
     mqttCore.publish(topic.forceOnTimeout, String(myDataEEPROM.forceOnTimeout).c_str());
     mqttCore.publish(topic.relay0, (myDataEEPROM.relayState[0]) ? "ON" : "OFF");
     mqttCore.publish(topic.relay1, (myDataEEPROM.relayState[1]) ? "ON" : "OFF");
+    mqttCore.publish(topic.temperatureMonitor, (myDataEEPROM.temperatureMonitor) ? "ON" : "OFF");
+    mqttCore.publish(topic.temperatureInterval, String(myDataEEPROM.temperatureInterval).c_str());
     Serial.println("Done");
   }
 }
@@ -501,6 +537,26 @@ void callback(char *cbtopic, byte *message, unsigned int length)
     }
   }
 
+  if (String(cbtopic) == topic.temperatureInterval)
+  {
+    if (messageTemp.toInt() >= 1 && messageTemp.toInt() <= 60)
+    {
+      if (myDataEEPROM.temperatureInterval != messageTemp.toInt())
+      {
+        myDataEEPROM.temperatureInterval = messageTemp.toInt();
+        updateEEPROM();
+      }
+    }
+  }
+
+  if (String(cbtopic) == topic.temperatureMonitor)
+  {
+    if (messageTemp == "T")
+    {
+      toggledTemperatureMonitor();
+    }
+  }
+
   if (String(cbtopic) == topic.forceOnTimeout)
   {
     if (myDataEEPROM.forceOnTimeout != messageTemp.toInt())
@@ -515,6 +571,10 @@ void callback(char *cbtopic, byte *message, unsigned int length)
     if (messageTemp == "get-config")
     {
       publishDeviceConfig();
+    }
+    if (messageTemp == "restart-now")
+    {
+      ESP.restart();
     }
   }
 }
@@ -573,6 +633,49 @@ void initOta()
   ArduinoOTA.begin();
 }
 
+void checkTemperature()
+{
+  if (myDataEEPROM.temperatureMonitor == 1)
+  {
+    if (nowMillis - lastCheckTemperature > myDataEEPROM.temperatureInterval * 1000)
+    {
+      lastCheckTemperature = nowMillis;
+      if (onlineMode == 1)
+      {
+        sensorTemperature.requestTemperatures();
+        float temperatureC = sensorTemperature.getTempCByIndex(0);
+        char tempString[8];
+        dtostrf(temperatureC, 1, 2, tempString);
+        Serial.println(temperatureC);
+        mqttCore.publish(topic.temperatureData, tempString);
+      }
+    }
+  }
+}
+
+void toggledTemperatureMonitor()
+{
+  if (myDataEEPROM.temperatureMonitor == 0)
+  {
+    myDataEEPROM.temperatureMonitor = 1;
+  }
+  else
+  {
+    myDataEEPROM.temperatureMonitor = 0;
+  }
+
+  updateEEPROM();
+
+  Serial.print("toggledTemperatureMonitor ");
+  Serial.print(stateForceOn);
+  Serial.println("");
+}
+
+void makeTone(int frequencyHz, unsigned long durationMs)
+{
+  tone(pinBuzzer, frequencyHz, durationMs);
+}
+
 void loop()
 {
   nowMillis = millis();
@@ -586,13 +689,8 @@ void loop()
 
   // keep watching the push button:
   smartBtn.tick();
+  checkTemperature();
+  checkSchedule();
 
-  if (nowMillis - lastCheck > myDataEEPROM.checkInterval * 1000) //Check every seconds
-  {
-    lastCheck = nowMillis;
-    now = checkRTC();
-    //lampController or relay0
-    lampController();
-  }
   //DONT USE DELAY()
 }
