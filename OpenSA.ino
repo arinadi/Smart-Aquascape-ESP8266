@@ -14,6 +14,9 @@
 //Config File (connectifity and pinout)
 #include "config.h"
 
+//Prototypes
+void makeTone(const int frequencyHz, const unsigned long durationMs, const unsigned int repeat = 1);
+
 void setup()
 {
   // Start
@@ -368,9 +371,8 @@ void checkWiFi()
   if (onlineMode == 0 && nowMillis - lastCheckWifi > nextWiFiReconnect)
   {
     onlineMode = 1;
-    nextWiFiReconnect = checkWiFiReconnect * 1000 * 60;
   }
-  
+
   if (onlineMode == 1)
   {
     if (WiFi.status() != WL_CONNECTED)
@@ -397,7 +399,8 @@ void checkWiFi()
 void offlineMode()
 {
   onlineMode = 0;
-  makeTone(1046, 2000);
+  makeTone(1046, 1000, 3);
+  nextWiFiReconnect = checkWiFiReconnect * 1000 * 60;
 }
 
 void initMqtt()
@@ -435,7 +438,6 @@ void checkMqtt()
       {
         Serial.print("failed with state ");
         Serial.print(mqttCore.state());
-        makeTone(1046, 2000);
         delay(1000);
       }
       // digitalWrite(LED_BUILTIN, HIGH);
@@ -443,6 +445,7 @@ void checkMqtt()
       delay(1000);
       if (nowMillis - lastCheckMqtt > checkMqttTimeout * 1000)
       {
+        makeTone(1046, 1000, 2);
         mqttServiceState = 0;
         break;
       }
@@ -668,9 +671,18 @@ void toggledTemperatureMonitor()
   Serial.println("");
 }
 
-void makeTone(const int frequencyHz, const unsigned long durationMs)
+void makeTone(const int frequencyHz, const unsigned long durationMs, const unsigned int repeat)
 {
-  tone(pinBuzzer, frequencyHz, durationMs);
+  for (int i = 0; i < repeat; i++)
+  {
+    tone(pinBuzzer, frequencyHz);
+    delay(durationMs);
+    noTone(pinBuzzer);
+    if (repeat > 1)
+    {
+      delay(500);
+    }
+  }
 }
 
 void loop()
