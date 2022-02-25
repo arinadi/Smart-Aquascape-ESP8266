@@ -384,10 +384,7 @@ void checkWiFi()
     {
       nowMillis = millis();
       Serial.print(".");
-      // digitalWrite(LED_BUILTIN, LOW);
-      // delay(500);
-      // digitalWrite(LED_BUILTIN, HIGH);
-      // delay(500);
+      delay(1000);
       if (nowMillis - lastCheckWifi > checkWiFiTimeout * 1000)
       {
         offlineMode();
@@ -432,7 +429,7 @@ void checkMqtt()
         Serial.println((mqttCore.subscribe(topic.main)) ? "OK" : "failed");
 
         // publish
-        mqttCore.publish(topic.hello, "OpenSA MQTT Ready");
+        publishMqtt(topic.hello, "OpenSA MQTT Ready");
       }
       else
       {
@@ -466,13 +463,13 @@ void publishDeviceConfig()
   if (mqttServiceState == 1)
   {
     Serial.println("Sending device configuration...");
-    mqttCore.publish(topic.relay0Start, String(myDataEEPROM.relay0HoursStart).c_str());
-    mqttCore.publish(topic.relay0End, String(myDataEEPROM.relay0HoursEnd).c_str());
-    mqttCore.publish(topic.forceOnTimeout, String(myDataEEPROM.forceOnTimeout).c_str());
-    mqttCore.publish(topic.relay0, (myDataEEPROM.relayState[0]) ? "ON" : "OFF");
-    mqttCore.publish(topic.relay1, (myDataEEPROM.relayState[1]) ? "ON" : "OFF");
-    mqttCore.publish(topic.temperatureMonitor, (myDataEEPROM.temperatureMonitor) ? "ON" : "OFF");
-    mqttCore.publish(topic.temperatureInterval, String(myDataEEPROM.temperatureInterval).c_str());
+    publishMqtt(topic.relay0Start, String(myDataEEPROM.relay0HoursStart).c_str());
+    publishMqtt(topic.relay0End, String(myDataEEPROM.relay0HoursEnd).c_str());
+    publishMqtt(topic.forceOnTimeout, String(myDataEEPROM.forceOnTimeout).c_str());
+    publishMqtt(topic.relay0, (myDataEEPROM.relayState[0]) ? "ON" : "OFF");
+    publishMqtt(topic.relay1, (myDataEEPROM.relayState[1]) ? "ON" : "OFF");
+    publishMqtt(topic.temperatureMonitor, (myDataEEPROM.temperatureMonitor) ? "ON" : "OFF");
+    publishMqtt(topic.temperatureInterval, String(myDataEEPROM.temperatureInterval).c_str());
     Serial.println("Done");
   }
 }
@@ -647,7 +644,7 @@ void checkTemperature()
         char tempString[8];
         dtostrf(temperatureC, 1, 2, tempString);
         Serial.println(temperatureC);
-        mqttCore.publish(topic.temperatureData, tempString);
+        publishMqtt(topic.temperatureData, tempString);
       }
     }
   }
@@ -671,7 +668,7 @@ void toggledTemperatureMonitor()
   Serial.println("");
 }
 
-void makeTone(int frequencyHz, unsigned long durationMs)
+void makeTone(const int frequencyHz, const unsigned long durationMs)
 {
   tone(pinBuzzer, frequencyHz, durationMs);
 }
