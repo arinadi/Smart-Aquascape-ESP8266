@@ -11,10 +11,13 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-//Config File (connectifity and pinout)
+// Config File (connectifity and pinout)
 #include "config.h"
 
-//Prototypes
+// Tone Pitches
+#include "pitches.h"
+
+// Prototypes
 void makeTone(const int frequencyHz, const unsigned long durationMs, const unsigned int repeat = 1);
 
 void setup()
@@ -25,26 +28,29 @@ void setup()
   //   while (!Serial); // wait for serial port to connect. Needed for native USB
   // #endif
 
-  //init EEPROM
+  // init EEPROM
   initEEPROM();
 
-  //init buzzer
-  makeTone(523, 500);
+  // init buzzer
+  makeTone(NOTE_C5, 500);
 
-  //init relay
+  // init relay
   initRelay();
 
-  //init led
-  // pinMode(LED_BUILTIN, OUTPUT);
+  // init led
+  //  pinMode(LED_BUILTIN, OUTPUT);
 
-  //init SmartBtn
+  // init SmartBtn
   initSmartBtn();
 
-  //init Wifi
+  // init Wifi
   initWifi();
 
-  //init RTC
+  // init RTC
   initRTC();
+
+  // init NTP
+  initNTP();
 
   // Init DS18B20
   sensorTemperature.begin();
@@ -57,26 +63,28 @@ void setup()
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
 
-    //init OTA
+    // init OTA
     initOta();
 
-    //init MQTT
+    // init MQTT
     initMqtt();
 
-    //init Server
+    // init Server
     initServer();
   }
 }
 
 void initServer()
 {
-  server.on("/restart", []()
-            {
+  if (serviceWebServer)
+  {
+    server.on("/restart", []()
+              {
               server.send(200, "text/plain", "Restarting...");
               delay(3000);
-              ESP.restart();
-            });
-  server.begin();
+              ESP.restart(); });
+    server.begin();
+  }
 }
 
 void initEEPROM()
@@ -88,23 +96,12 @@ void initEEPROM()
   Serial.println(myDataEEPROM.test);
   if (myDataEEPROM.test != 1)
   {
-    boolean result = EEPROM.wipe();
-    if (result)
-    {
-      Serial.println("All EEPROM data wiped");
-    }
-    else
-    {
-      Serial.println("EEPROM data could not be wiped from flash store");
-    }
+    resetEEPROM();
+  }
 
-    dataEEPROM myDataEEPROM;
-    Serial.println("EEPROM reseting");
-    Serial.println(myDataEEPROM.test);
-    EEPROM.put(0, myDataEEPROM);
-    boolean ok = EEPROM.commitReset();
-    Serial.println((ok) ? "Commit (Reset) OK" : "Commit failed");
-    Serial.println(myDataEEPROM.test);
+  if (myDataEEPROM.lightingMode == 2)
+  {
+    updateDianaLighting();
   }
 }
 
@@ -122,42 +119,87 @@ void updateEEPROM()
   }
 }
 
-void initRTC()
+void resetEEPROM()
 {
-  if (!rtc.begin())
+  boolean result = EEPROM.wipe();
+  if (result)
   {
-    Serial.println("Couldn't find RTC");
-    Serial.flush();
-    while (1)
-      delay(10);
+    Serial.println("All EEPROM data wiped");
+  }
+  else
+  {
+    Serial.println("EEPROM data could not be wiped from flash store");
   }
 
-  if (!rtc.isrunning())
-  {
-    Serial.println("RTC is NOT running, let's set the time!");
-    // When time needs to be set on a new device, or after a power loss, the
-    // following line sets the RTC to the date & time this sketch was compiled
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-    Serial.print("DS1307 configured Time=");
-    Serial.print(__TIME__);
+  dataEEPROM myDataEEPROM;
+  Serial.println("EEPROM reseting");
+  Serial.println(myDataEEPROM.test);
+  EEPROM.put(0, myDataEEPROM);
+  boolean ok = EEPROM.commitReset();
+  Serial.println((ok) ? "Commit (Reset) OK" : "Commit failed");
+  Serial.println(myDataEEPROM.test);
+}
 
-    Serial.print(", Date=");
-    Serial.println(__DATE__);
+void initRTC()
+{
+  if (serviceRtc)
+  {
+
+    if (!rtc.begin())
+    {
+      Serial.println("Couldn't find RTC");
+      Serial.flush();
+      while (1)
+        delay(10);
+    }
+
+    if (!rtc.isrunning())
+    {
+      Serial.println("RTC is NOT running, let's set the time!");
+      // When time needs to be set on a new device, or after a power loss, the
+      // following line sets the RTC to the date & time this sketch was compiled
+      rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+      Serial.print("DS1307 configured Time=");
+      Serial.print(__TIME__);
+
+      Serial.print(", Date=");
+      Serial.println(__DATE__);
+      // This line sets the RTC with an explicit date & time, for example to set
+      // January 21, 2014 at 3am you would call:
+      // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
+    }
+
+    // When time needs to be re-set on a previously configured device, the
+    // following line sets the RTC to the date & time this sketch was compiled
+    // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
     // This line sets the RTC with an explicit date & time, for example to set
     // January 21, 2014 at 3am you would call:
     // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
   }
-
+}
+void initNTP()
+{
   if (onlineMode == 1)
   {
-    timeClient.begin();
-    // Set offset time in seconds to adjust for your timezone, for example:
-    // GMT +1 = 3600
-    // GMT +8 = 28800
-    // GMT -1 = -3600
-    // GMT 0 = 0
-    timeClient.setTimeOffset(myTimezone * 3600);
-    timeClient.update();
+    if (serviceNtp)
+    {
+      timeClient.begin();
+      // Set offset time in seconds to adjust for your timezone, for example:
+      // GMT +1 = 3600
+      // GMT +8 = 28800
+      // GMT -1 = -3600
+      // GMT 0 = 0
+      timeClient.setTimeOffset(myTimezone * 3600);
+      timeClient.update();
+      autoAdjustTime();
+    }
+  }
+}
+
+void autoAdjustTime()
+{
+  if (onlineMode == 1)
+  {
     DateTime now = rtc.now();
     Serial.println("RTC :");
     Serial.println(now.hour());
@@ -168,7 +210,7 @@ void initRTC()
       Serial.println("Let's set the time!");
 
       unsigned long epochTime = timeClient.getEpochTime();
-      //Get a time structure
+      // Get a time structure
       struct tm *ptm = gmtime((time_t *)&epochTime);
       int monthDay = ptm->tm_mday;
       int month = ptm->tm_mon + 1;
@@ -183,51 +225,59 @@ void initRTC()
       Serial.println(timeClient.getHours());
     }
   }
-
-  // When time needs to be re-set on a previously configured device, the
-  // following line sets the RTC to the date & time this sketch was compiled
-  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  // This line sets the RTC with an explicit date & time, for example to set
-  // January 21, 2014 at 3am you would call:
-  // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
 }
 
 void toggledRelay(int index, int state)
 {
-  int i = index;
-  if (myDataEEPROM.relayState[i] != state)
+  if (serviceRelay)
   {
-    if (state == 1)
+    int i = index;
+    if (myDataEEPROM.relayState[i] != state)
     {
-      digitalWrite(pinRelay[i], LOW); //turn on the relay
-      Serial.println(" Turn On");
+      if (state == 1)
+      {
+        digitalWrite(pinRelay[i], LOW); // turn on the relay
+        Serial.println(" Turn On");
+      }
+      else
+      {
+        digitalWrite(pinRelay[i], HIGH); // turn off the relay
+        Serial.println(" Turn Off");
+      }
+      myDataEEPROM.relayState[i] = state;
+      updateEEPROM();
+      Serial.print("Relay ");
+      Serial.print(i);
+      Serial.print(" State ");
+      Serial.print(myDataEEPROM.relayState[i]);
+      Serial.println("");
+      makeTone(NOTE_G5, 1000);
+      if (i == 0)
+      {
+        publishMqtt(topic.relay0, (myDataEEPROM.relayState[i]) ? "ON" : "OFF");
+      }
+      if (i == 1)
+      {
+        publishMqtt(topic.relay1, (myDataEEPROM.relayState[i]) ? "ON" : "OFF");
+      }
     }
-    else
-    {
-      digitalWrite(pinRelay[i], HIGH); //turn off the relay
-      Serial.println(" Turn Off");
-    }
-    myDataEEPROM.relayState[i] = state;
-    updateEEPROM();
-    Serial.print("Relay ");
-    Serial.print(i);
-    Serial.print(" State ");
-    Serial.print(myDataEEPROM.relayState[i]);
-    Serial.println("");
-    makeTone(659, 1000);
   }
 }
 
 void initSmartBtn()
 {
-  pinMode(pinSmartBtn, INPUT_PULLUP);
+  if (serviceOneButton)
+  {
+    pinMode(pinSmartBtn, INPUT_PULLUP);
 
-  //force on Lamp
-  smartBtn.attachClick(toggledForceOn);
+    // force on Lamp
+    smartBtn.attachClick(toggledForceOn);
 
-  //restart OpenSA
-  smartBtn.attachLongPressStop([]()
-                               { ESP.restart(); });
+    // restart OpenSA
+    smartBtn.attachLongPressStop(
+        []()
+        { ESP.restart(); });
+  }
 }
 
 void toggledForceOn()
@@ -259,14 +309,13 @@ void lampController()
   }
   if (stateForceOn == 0)
   {
-    int hours = now.hour();
-    if (hours >= myDataEEPROM.relay0HoursStart && hours < myDataEEPROM.relay0HoursEnd)
+    if (myDataEEPROM.lightingMode == 1)
     {
-      toggledRelay(0, 1);
+      longLighing();
     }
-    else
+    if (myDataEEPROM.lightingMode == 2)
     {
-      toggledRelay(0, 0);
+      dianaLighting();
     }
   }
   else
@@ -275,25 +324,84 @@ void lampController()
   }
 }
 
+void longLighing()
+{
+  int hours = now.hour();
+  if (hours >= myDataEEPROM.relay0HoursStart && hours < myDataEEPROM.relay0HoursEnd)
+  {
+    toggledRelay(0, 1);
+  }
+  else
+  {
+    toggledRelay(0, 0);
+  }
+}
+
+void dianaLighting() // @Todo : Not Working
+{
+  int hours = now.hour();
+  bool onSchedule = false;
+  for (int i = 0; i < myDataEEPROM.lightingDianaCountSchedule; i++)
+  {
+    if (hours >= myDataEEPROM.lightingDianaScheduleStart[i] && hours < myDataEEPROM.lightingDianaScheduleEnd[i])
+    {
+      onSchedule = true;
+      break;
+    }
+  }
+  if (onSchedule)
+  {
+    toggledRelay(0, 1);
+  }
+  else
+  {
+    toggledRelay(0, 0);
+  }
+}
+void updateDianaLighting()
+{
+  int nextStart = myDataEEPROM.lightingDianaStart;
+  int i = 0;
+  while (nextStart < 24)
+  {
+    Serial.println(i);
+    myDataEEPROM.lightingDianaScheduleStart[i] = nextStart;
+    Serial.println(myDataEEPROM.lightingDianaScheduleStart[i]);
+    myDataEEPROM.lightingDianaScheduleEnd[i] = nextStart + myDataEEPROM.lightingDianaDuration;
+    Serial.println(myDataEEPROM.lightingDianaScheduleEnd[i]);
+    nextStart = myDataEEPROM.lightingDianaScheduleEnd[i] + (myDataEEPROM.lightingDianaDuration - 1);
+    Serial.println(nextStart);
+    i++;
+    myDataEEPROM.lightingDianaCountSchedule = i;
+    Serial.println(myDataEEPROM.lightingDianaCountSchedule);
+    Serial.println("========");
+  }
+
+  updateEEPROM();
+}
+
 void initRelay()
 {
-  for (int i = 0; i < relays; i++)
+  if (serviceRelay)
   {
-    pinMode(pinRelay[i], OUTPUT); // set pinMode to OUTPUT
-    if (myDataEEPROM.relayState[i] == 1)
+    for (int i = 0; i < relays; i++)
     {
-      digitalWrite(pinRelay[i], LOW); //turn on the relay
-    }
-    else
-    {
-      digitalWrite(pinRelay[i], HIGH); //turn off the relay
-    }
+      pinMode(pinRelay[i], OUTPUT); // set pinMode to OUTPUT
+      if (myDataEEPROM.relayState[i] == 1)
+      {
+        digitalWrite(pinRelay[i], LOW); // turn on the relay
+      }
+      else
+      {
+        digitalWrite(pinRelay[i], HIGH); // turn off the relay
+      }
 
-    Serial.print("Relay ");
-    Serial.print(i);
-    Serial.print("State ");
-    Serial.print(myDataEEPROM.relayState[i]);
-    Serial.println("");
+      Serial.print("Relay ");
+      Serial.print(i);
+      Serial.print("State ");
+      Serial.print(myDataEEPROM.relayState[i]);
+      Serial.println("");
+    }
   }
 }
 
@@ -347,12 +455,15 @@ DateTime checkRTC()
 
 void checkSchedule()
 {
-  if (nowMillis - lastCheckSchedule > myDataEEPROM.checkScheduleInterval * 1000) //Check every seconds
+  if (serviceRtc)
   {
-    lastCheckSchedule = nowMillis;
-    now = checkRTC();
-    //lampController or relay0
-    lampController();
+    if (nowMillis - lastCheckSchedule > myDataEEPROM.checkScheduleInterval * 1000) // Check every seconds
+    {
+      lastCheckSchedule = nowMillis;
+      now = checkRTC();
+      // lampController or relay0
+      lampController();
+    }
   }
 }
 
@@ -399,20 +510,23 @@ void checkWiFi()
 void offlineMode()
 {
   onlineMode = 0;
-  makeTone(1046, 1000, 3);
+  makeTone(NOTE_A5, 1000, 3);
   nextWiFiReconnect = checkWiFiReconnect * 1000 * 60;
 }
 
 void initMqtt()
 {
-  //connecting to a mqtt broker
-  mqttCore.setServer(mqttBroker, mqttPort);
-  mqttCore.setCallback(callback);
+  if (serviceMqtt)
+  {
+    // connecting to a mqtt broker
+    mqttCore.setServer(mqttBroker, mqttPort);
+    mqttCore.setCallback(callback);
+  }
 }
 
 void checkMqtt()
 {
-  if (mqttServiceState == 1)
+  if (serviceMqtt)
   {
     lastCheckMqtt = nowMillis;
     // Loop until we're reconnected
@@ -445,8 +559,8 @@ void checkMqtt()
       delay(1000);
       if (nowMillis - lastCheckMqtt > checkMqttTimeout * 1000)
       {
-        makeTone(1046, 1000, 2);
-        mqttServiceState = 0;
+        makeTone(NOTE_A5, 1000, 2);
+        serviceMqtt = false;
         break;
       }
     }
@@ -456,28 +570,75 @@ void checkMqtt()
 
 void publishMqtt(const char *topic, const char *message)
 {
-  if (mqttServiceState == 1)
+  if (serviceMqtt)
   {
     mqttCore.publish(topic, message);
   }
 }
 void publishDeviceConfig()
 {
-  if (mqttServiceState == 1)
+  if (serviceMqtt)
   {
     Serial.println("Sending device configuration...");
-    publishMqtt(topic.relay0Start, String(myDataEEPROM.relay0HoursStart).c_str());
-    publishMqtt(topic.relay0End, String(myDataEEPROM.relay0HoursEnd).c_str());
     publishMqtt(topic.forceOnTimeout, String(myDataEEPROM.forceOnTimeout).c_str());
     publishMqtt(topic.relay0, (myDataEEPROM.relayState[0]) ? "ON" : "OFF");
     publishMqtt(topic.relay1, (myDataEEPROM.relayState[1]) ? "ON" : "OFF");
     publishMqtt(topic.temperatureMonitor, (myDataEEPROM.temperatureMonitor) ? "ON" : "OFF");
     publishMqtt(topic.temperatureInterval, String(myDataEEPROM.temperatureInterval).c_str());
+    publishLightConfig();
+
+    publishDeviceInfos();
+
     Serial.println("Done");
   }
 }
 
-//MQTT Subscription Handlers
+void publishDeviceInfos()
+{
+  checkTemperature();
+  publishMqtt(topic.hello, String("IP = " + WiFi.localIP().toString()).c_str());
+  publishTimeInfo();
+  publishLightInfo();
+}
+
+void publishLightConfig()
+{
+  publishMqtt(topic.lightingMode, String(myDataEEPROM.lightingMode).c_str());
+  if (myDataEEPROM.lightingMode == 1)
+  {
+    publishMqtt(topic.relay0Start, String(myDataEEPROM.relay0HoursStart).c_str());
+    publishMqtt(topic.relay0End, String(myDataEEPROM.relay0HoursEnd).c_str());
+  }
+  if (myDataEEPROM.lightingMode == 2)
+  {
+    publishMqtt(topic.lightingDianaStart, String(myDataEEPROM.lightingDianaStart).c_str());
+    publishMqtt(topic.lightingDianaDuration, String(myDataEEPROM.lightingDianaDuration).c_str());
+  }
+}
+
+void publishLightInfo()
+{
+  if (myDataEEPROM.lightingMode == 2)
+  {
+    String dianaSchedule = String(myDataEEPROM.lightingDianaCountSchedule + " DS S:E = ");
+    for (int i = 0; i < myDataEEPROM.lightingDianaCountSchedule; i++)
+    {
+      dianaSchedule += String(myDataEEPROM.lightingDianaScheduleStart[i]) + ":" + String(myDataEEPROM.lightingDianaScheduleEnd[i]) + ", ";
+    }
+    publishMqtt(topic.hello, dianaSchedule.c_str());
+  }
+}
+
+void publishTimeInfo()
+{
+  String timeNow;
+  timeClient.update();
+  timeNow += String("RTC = " + String(now.hour()) + " | ");
+  timeNow += String("NTP = " + String(timeClient.getHours()) + " | ");
+  publishMqtt(topic.hello, timeNow.c_str());
+}
+
+// MQTT Subscription Handlers
 void callback(char *cbtopic, byte *message, unsigned int length)
 {
   Serial.print("Arrived in topic: ");
@@ -492,7 +653,7 @@ void callback(char *cbtopic, byte *message, unsigned int length)
   Serial.println();
   Serial.println("-----------------------");
 
-  //handle relay 0
+  // handle relay 0
   if (String(cbtopic) == topic.relay0)
   {
     if (messageTemp == "T")
@@ -500,7 +661,7 @@ void callback(char *cbtopic, byte *message, unsigned int length)
       toggledForceOn();
     }
   }
-  //handle relay 1
+  // handle relay 1
   if (String(cbtopic) == topic.relay1)
   {
     if (messageTemp == "ON")
@@ -513,9 +674,45 @@ void callback(char *cbtopic, byte *message, unsigned int length)
     }
   }
 
+  if (String(cbtopic) == topic.lightingMode)
+  {
+    if (messageTemp.toInt() == 1 || messageTemp.toInt() == 2)
+    {
+      if (myDataEEPROM.lightingMode != messageTemp.toInt())
+      {
+        myDataEEPROM.lightingMode = messageTemp.toInt();
+        updateEEPROM();
+      }
+    }
+  }
+
+  if (String(cbtopic) == topic.lightingDianaStart)
+  {
+    if (messageTemp.toInt() >= 0 && messageTemp.toInt() <= 24)
+    {
+      if (myDataEEPROM.lightingDianaStart != messageTemp.toInt())
+      {
+        myDataEEPROM.lightingDianaStart = messageTemp.toInt();
+        updateDianaLighting();
+      }
+    }
+  }
+
+  if (String(cbtopic) == topic.lightingDianaDuration)
+  {
+    if (messageTemp.toInt() >= 2 && messageTemp.toInt() <= 6)
+    {
+      if (myDataEEPROM.lightingDianaDuration != messageTemp.toInt())
+      {
+        myDataEEPROM.lightingDianaDuration = messageTemp.toInt();
+        updateDianaLighting();
+      }
+    }
+  }
+
   if (String(cbtopic) == topic.relay0Start)
   {
-    if (messageTemp.toInt() >= 0 && messageTemp.toInt() <= 23)
+    if (messageTemp.toInt() >= 0 && messageTemp.toInt() <= 24)
     {
       if (myDataEEPROM.relay0HoursStart != messageTemp.toInt())
       {
@@ -527,7 +724,7 @@ void callback(char *cbtopic, byte *message, unsigned int length)
 
   if (String(cbtopic) == topic.relay0End)
   {
-    if (messageTemp.toInt() >= 0 && messageTemp.toInt() <= 23)
+    if (messageTemp.toInt() >= 0 && messageTemp.toInt() <= 24)
     {
       if (myDataEEPROM.relay0HoursEnd != messageTemp.toInt())
       {
@@ -572,9 +769,21 @@ void callback(char *cbtopic, byte *message, unsigned int length)
     {
       publishDeviceConfig();
     }
+    if (messageTemp == "get-infos")
+    {
+      publishDeviceInfos();
+    }
+    if (messageTemp == "time-adjust")
+    {
+      autoAdjustTime();
+    }
     if (messageTemp == "restart-now")
     {
       ESP.restart();
+    }
+    if (messageTemp == "reset-eeprom")
+    {
+      resetEEPROM();
     }
   }
 }
@@ -600,8 +809,7 @@ void initOta()
                        }
 
                        // NOTE: if updating FS this would be the place to unmount FS using FS.end()
-                       Serial.println("Start updating " + type);
-                     });
+                       Serial.println("Start updating " + type); });
   ArduinoOTA.onEnd([]()
                    { Serial.println("\nEnd"); });
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
@@ -628,26 +836,28 @@ void initOta()
                        else if (error == OTA_END_ERROR)
                        {
                          Serial.println("End Failed");
-                       }
-                     });
+                       } });
   ArduinoOTA.begin();
 }
 
 void checkTemperature()
 {
-  if (myDataEEPROM.temperatureMonitor == 1)
+  if (serviceDallasTemperature)
   {
-    if (nowMillis - lastCheckTemperature > myDataEEPROM.temperatureInterval * 1000)
+    if (myDataEEPROM.temperatureMonitor == 1)
     {
-      lastCheckTemperature = nowMillis;
-      if (onlineMode == 1)
+      if (nowMillis - lastCheckTemperature > myDataEEPROM.temperatureInterval * 1000)
       {
-        sensorTemperature.requestTemperatures();
-        float temperatureC = sensorTemperature.getTempCByIndex(0);
-        char tempString[8];
-        dtostrf(temperatureC, 1, 2, tempString);
-        Serial.println(temperatureC);
-        publishMqtt(topic.temperatureData, tempString);
+        lastCheckTemperature = nowMillis;
+        if (onlineMode == 1)
+        {
+          sensorTemperature.requestTemperatures();
+          float temperatureC = sensorTemperature.getTempCByIndex(0);
+          char tempString[8];
+          dtostrf(temperatureC, 1, 2, tempString);
+          Serial.println(temperatureC);
+          publishMqtt(topic.temperatureData, tempString);
+        }
       }
     }
   }
@@ -655,32 +865,38 @@ void checkTemperature()
 
 void toggledTemperatureMonitor()
 {
-  if (myDataEEPROM.temperatureMonitor == 0)
+  if (serviceDallasTemperature)
   {
-    myDataEEPROM.temperatureMonitor = 1;
-  }
-  else
-  {
-    myDataEEPROM.temperatureMonitor = 0;
-  }
+    if (myDataEEPROM.temperatureMonitor == 0)
+    {
+      myDataEEPROM.temperatureMonitor = 1;
+    }
+    else
+    {
+      myDataEEPROM.temperatureMonitor = 0;
+    }
 
-  updateEEPROM();
+    updateEEPROM();
 
-  Serial.print("toggledTemperatureMonitor ");
-  Serial.print(stateForceOn);
-  Serial.println("");
+    Serial.print("toggledTemperatureMonitor ");
+    Serial.print(stateForceOn);
+    Serial.println("");
+  }
 }
 
 void makeTone(const int frequencyHz, const unsigned long durationMs, const unsigned int repeat)
 {
-  for (int i = 0; i < repeat; i++)
+  if (serviceBuzzer)
   {
-    tone(pinBuzzer, frequencyHz);
-    delay(durationMs);
-    noTone(pinBuzzer);
-    if (repeat > 1)
+    for (int i = 0; i < repeat; i++)
     {
-      delay(500);
+      tone(pinBuzzer, frequencyHz);
+      delay(durationMs);
+      noTone(pinBuzzer);
+      if (repeat > 1)
+      {
+        delay(durationMs / 2);
+      }
     }
   }
 }
@@ -694,12 +910,12 @@ void loop()
     ArduinoOTA.handle();
     checkMqtt();
   }
-  //DONT USE DELAY()
+  // DONT USE DELAY()
 
   // keep watching the push button:
   smartBtn.tick();
   checkTemperature();
   checkSchedule();
 
-  //DONT USE DELAY()
+  // DONT USE DELAY()
 }

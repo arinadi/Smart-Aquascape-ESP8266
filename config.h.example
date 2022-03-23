@@ -1,3 +1,13 @@
+//Services Control
+bool serviceMqtt = true;
+bool serviceWebServer = true;
+bool serviceRelay = true;
+bool serviceRtc = true;
+bool serviceNtp = true;
+bool serviceOneButton = true;
+bool serviceDallasTemperature = true;
+bool serviceBuzzer = true;
+
 //Config WiFi
 #ifndef STASSID
 #define STASSID "xxxx"
@@ -18,24 +28,28 @@ const char* otaPassword = "xxxx";
 
 //Config MQTT
 PubSubClient mqttCore(espClient);
-int mqttServiceState = 1;
 int checkMqttTimeout = 15;
 const char *mqttBroker = "broker.emqx.io";
 const int mqttPort = 1883;
 const char *mqttUsername = "emqx";
 const char *mqttPassword = "public";
+String MqttPrefix = String("xxx/");
 struct {
-    const char *main = "xxx/#";
-    const char *hello = "xxx/h";
-    const char *relay0 = "xxx/r/0";
-    const char *relay0Start = "xxx/r/0/s";
-    const char *relay0End = "xxx/r/0/e";
-    const char *relay1 = "xxx/r/1";
-    const char *forceOnTimeout = "xxx/fot";
-    const char *commands = "xxx/cmd";
-    const char *temperatureData = "xxx/t/d";
-    const char *temperatureInterval = "xxx/t/i";
-    const char *temperatureMonitor = "xxx/t/m";
+    const char *main = strdup(String(MqttPrefix + "s/#").c_str());
+    const char *hello = strdup(String(MqttPrefix + "d/h").c_str());
+    const char *relay0 = strdup(String(MqttPrefix + "s/r/0").c_str());
+    const char *relay0Start = strdup(String(MqttPrefix + "s/r/0/s").c_str());
+    const char *relay0End = strdup(String(MqttPrefix + "s/r/0/e").c_str());
+    const char *relay1 = strdup(String(MqttPrefix + "s/r/1").c_str());
+    const char *forceOnTimeout = strdup(String(MqttPrefix + "s/fot").c_str());
+    const char *lightingMode = strdup(String(MqttPrefix + "s/lm").c_str());
+    const char *lightingDianaStart = strdup(String(MqttPrefix + "s/lds").c_str());
+    const char *lightingDianaDuration = strdup(String(MqttPrefix + "s/ldd").c_str());
+    const char *commands = strdup(String(MqttPrefix + "s/cmd").c_str());
+    const char *temperatureData = strdup(String(MqttPrefix + "d/t").c_str());
+    const char *temperatureInterval = strdup(String(MqttPrefix + "s/t/i").c_str());
+    const char *temperatureMonitor = strdup(String(MqttPrefix + "s/t/m").c_str());
+    const char *temperatureAlarm = strdup(String(MqttPrefix + "s/t/a").c_str());
 } topic;
 
 
@@ -86,12 +100,19 @@ const int pinBuzzer = 15;
 //Config EEPROM
 struct dataEEPROM {
     bool relayState[relays] = {0,0};
-    int relay0HoursStart = 17;
-    int relay0HoursEnd = 23;
+    int relay0HoursStart = 17; // 24 hours
+    int relay0HoursEnd = 23; // 24 hours
     int test = 1;
     int checkScheduleInterval = 1; //seconds
     int forceOnTimeout = 30; //minute
     bool temperatureMonitor = true;
     int temperatureInterval = 1; //second
-} myDataEEPROM;
-const int eepromSize = 512;
+    int lightingMode = 1; // 1 : long, 2 : Diana Walstad
+    int lightingDianaStart = 3; // 24 hours
+    int lightingDianaDuration = 4; // hour
+    int lightingDianaCountSchedule;
+    int lightingDianaScheduleStart[5];
+    int lightingDianaScheduleEnd[5];
+};
+dataEEPROM myDataEEPROM;
+const int eepromSize = 1024;

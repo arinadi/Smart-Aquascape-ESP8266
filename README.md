@@ -1,7 +1,7 @@
-# OpenSA
-## _Opensource Smart Aquascape_
+# Opensource Smart Aquascape
+## _Next Level Aquascape_
 
-OpenSA is a Aquascape management device.
+This is a Aquascape management device.
 
 - 👨‍💻 C++
 - 🛠 Arduino IDE
@@ -21,12 +21,14 @@ OpenSA is a Aquascape management device.
 - EEPROM Storage
 - 2 Channel AC (relay)
 - Temperature Monitor
+- Buzzer/Tone
 
 
 ### Channel Configuration
 
 1. Lamp Controll
-   - Schadule
+   - Schadule (One time long lighting)
+   - [Diana Walstad](https://acquariofilia.org/english-articles/af-interviews-diana-walstad/5/) (Periodic Light)
    - Force On with Timer
 2. Free Controll Any Device
 
