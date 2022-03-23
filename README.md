@@ -1,5 +1,5 @@
 # Opensource Smart Aquascape
-## _Next Level Aquascape_
+## _Next Level Aquascape Base On ESP8266_
 
 This is a Aquascape management device.
 
@@ -8,6 +8,7 @@ This is a Aquascape management device.
 - 💧 Water
 - 🌱 Plant
 - 🐟 Fish
+- ⚡ Power
 
 ## Features
 
@@ -28,7 +29,7 @@ This is a Aquascape management device.
 
 1. Lamp Controll
    - Schadule (One time long lighting)
-   - [Diana Walstad](https://acquariofilia.org/english-articles/af-interviews-diana-walstad/5/) (Periodic Light)
+   - [Diana Walstad](https://acquariofilia.org/english-articles/af-interviews-diana-walstad/5/) (Periodic Short Light / Low Tech Tank)
    - Force On with Timer
 2. Free Controll Any Device
 
