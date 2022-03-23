@@ -45,7 +45,7 @@ This is a Aquascape management device.
 - Some Jumper Wire
 
 ### Wiring
-- Coming Soon
+![Smart Aquascape ESP8266 Wiring](https://github.com/arinadi/Smart-Aquascape-ESP8266/blob/main/SmartAquascapeWiring.jpg?raw=true)
 
 ### Flashing
 1. rename config.h.example to config.h
