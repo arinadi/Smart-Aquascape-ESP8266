@@ -6,7 +6,7 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <PubSubClient.h>
-#include <ESP8266WebServer.h>
+// #include <ESP8266WebServer.h>
 #include "OneButton.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -70,22 +70,22 @@ void setup()
     initMqtt();
 
     // init Server
-    initServer();
+    // initServer();
   }
 }
 
-void initServer()
-{
-  if (serviceWebServer)
-  {
-    server.on("/restart", []()
-              {
-              server.send(200, "text/plain", "Restarting...");
-              delay(3000);
-              ESP.restart(); });
-    server.begin();
-  }
-}
+// void initServer()
+// {
+//   if (serviceWebServer)
+//   {
+//     server.on("/restart", []()
+//               {
+//               server.send(200, "text/plain", "Restarting...");
+//               delay(3000);
+//               ESP.restart(); });
+//     server.begin();
+//   }
+// }
 
 void initEEPROM()
 {
@@ -138,6 +138,7 @@ void resetEEPROM()
   boolean ok = EEPROM.commitReset();
   Serial.println((ok) ? "Commit (Reset) OK" : "Commit failed");
   Serial.println(myDataEEPROM.test);
+  updateDianaLighting();
 }
 
 void initRTC()
@@ -169,6 +170,7 @@ void initRTC()
       // rtc.adjust(DateTime(2014, 1, 21, 3, 0, 0));
     }
 
+    now = checkRTC();
     // When time needs to be re-set on a previously configured device, the
     // following line sets the RTC to the date & time this sketch was compiled
     // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
@@ -200,7 +202,6 @@ void autoAdjustTime()
 {
   if (onlineMode == 1)
   {
-    DateTime now = rtc.now();
     Serial.println("RTC :");
     Serial.println(now.hour());
     Serial.println("NTP :");
@@ -218,7 +219,7 @@ void autoAdjustTime()
 
       rtc.adjust(DateTime(year, month, monthDay, timeClient.getHours(), timeClient.getMinutes(), timeClient.getSeconds()));
 
-      DateTime now = rtc.now();
+      now = checkRTC();
       Serial.println("RTC :");
       Serial.println(now.hour());
       Serial.println("NTP :");
@@ -358,6 +359,7 @@ void dianaLighting() // @Todo : Not Working
     toggledRelay(0, 0);
   }
 }
+
 void updateDianaLighting()
 {
   int nextStart = myDataEEPROM.lightingDianaStart;
@@ -378,6 +380,36 @@ void updateDianaLighting()
   }
 
   updateEEPROM();
+}
+
+void filterController()
+{
+  if (myDataEEPROM.filterMode == 1)
+  {
+    alwaysOnFilter();
+  }
+  if (myDataEEPROM.filterMode == 2)
+  {
+    schaduledFilter();
+  }
+}
+
+void schaduledFilter()
+{
+  int hours = now.hour();
+  if (hours >= myDataEEPROM.relay1HoursStart && hours < myDataEEPROM.relay1HoursEnd)
+  {
+    toggledRelay(1, 1);
+  }
+  else
+  {
+    toggledRelay(1, 0);
+  }
+}
+
+void alwaysOnFilter()
+{
+  toggledRelay(1, 1);
 }
 
 void initRelay()
@@ -463,6 +495,7 @@ void checkSchedule()
       now = checkRTC();
       // lampController or relay0
       lampController();
+      filterController();
     }
   }
 }
@@ -511,7 +544,7 @@ void offlineMode()
 {
   onlineMode = 0;
   makeTone(NOTE_A5, 1000, 3);
-  nextWiFiReconnect = checkWiFiReconnect * 1000 * 60;
+  nextWiFiReconnect = lastCheckWifi + (checkWiFiReconnect * 1000 * 60);
 }
 
 void initMqtt()
@@ -586,6 +619,7 @@ void publishDeviceConfig()
     publishMqtt(topic.temperatureMonitor, (myDataEEPROM.temperatureMonitor) ? "ON" : "OFF");
     publishMqtt(topic.temperatureInterval, String(myDataEEPROM.temperatureInterval).c_str());
     publishLightConfig();
+    publishFilterConfig();
 
     publishDeviceInfos();
 
@@ -599,6 +633,16 @@ void publishDeviceInfos()
   publishMqtt(topic.hello, String("IP = " + WiFi.localIP().toString()).c_str());
   publishTimeInfo();
   publishLightInfo();
+}
+
+void publishFilterConfig()
+{
+  publishMqtt(topic.filterMode, String(myDataEEPROM.filterMode).c_str());
+  if (myDataEEPROM.filterMode == 2)
+  {
+    publishMqtt(topic.relay1Start, String(myDataEEPROM.relay1HoursStart).c_str());
+    publishMqtt(topic.relay1End, String(myDataEEPROM.relay1HoursEnd).c_str());
+  }
 }
 
 void publishLightConfig()
@@ -633,6 +677,7 @@ void publishTimeInfo()
 {
   String timeNow;
   timeClient.update();
+  now = checkRTC();
   timeNow += String("RTC = " + String(now.hour()) + " | ");
   timeNow += String("NTP = " + String(timeClient.getHours()) + " | ");
   publishMqtt(topic.hello, timeNow.c_str());
@@ -661,16 +706,16 @@ void callback(char *cbtopic, byte *message, unsigned int length)
       toggledForceOn();
     }
   }
-  // handle relay 1
-  if (String(cbtopic) == topic.relay1)
+
+  if (String(cbtopic) == topic.filterMode)
   {
-    if (messageTemp == "ON")
+    if (messageTemp.toInt() == 1 || messageTemp.toInt() == 2)
     {
-      toggledRelay(1, 1);
-    }
-    if (messageTemp == "OFF")
-    {
-      toggledRelay(1, 0);
+      if (myDataEEPROM.filterMode != messageTemp.toInt())
+      {
+        myDataEEPROM.filterMode = messageTemp.toInt();
+        updateEEPROM();
+      }
     }
   }
 
@@ -734,6 +779,30 @@ void callback(char *cbtopic, byte *message, unsigned int length)
     }
   }
 
+  if (String(cbtopic) == topic.relay1Start)
+  {
+    if (messageTemp.toInt() >= 0 && messageTemp.toInt() <= 24)
+    {
+      if (myDataEEPROM.relay1HoursStart != messageTemp.toInt())
+      {
+        myDataEEPROM.relay1HoursStart = messageTemp.toInt();
+        updateEEPROM();
+      }
+    }
+  }
+
+  if (String(cbtopic) == topic.relay1End)
+  {
+    if (messageTemp.toInt() >= 0 && messageTemp.toInt() <= 24)
+    {
+      if (myDataEEPROM.relay1HoursEnd != messageTemp.toInt())
+      {
+        myDataEEPROM.relay1HoursEnd = messageTemp.toInt();
+        updateEEPROM();
+      }
+    }
+  }
+
   if (String(cbtopic) == topic.temperatureInterval)
   {
     if (messageTemp.toInt() >= 1 && messageTemp.toInt() <= 60)
@@ -776,14 +845,17 @@ void callback(char *cbtopic, byte *message, unsigned int length)
     if (messageTemp == "time-adjust")
     {
       autoAdjustTime();
+      publishTimeInfo();
     }
     if (messageTemp == "restart-now")
     {
+      publishMqtt(topic.hello, "Restarting Now");
       ESP.restart();
     }
     if (messageTemp == "reset-eeprom")
     {
       resetEEPROM();
+      publishDeviceConfig();
     }
   }
 }

@@ -1,6 +1,6 @@
 //Services Control
 bool serviceMqtt = true;
-bool serviceWebServer = true;
+// bool serviceWebServer = true;
 bool serviceRelay = true;
 bool serviceRtc = true;
 bool serviceNtp = true;
@@ -9,31 +9,28 @@ bool serviceDallasTemperature = true;
 bool serviceBuzzer = true;
 
 //Config WiFi
-#ifndef STASSID
-#define STASSID "xxxx"
-#define STAPSK  "xxxx"
-#endif
-
 WiFiClient espClient;
 
-const char* ssid = STASSID;
-const char* password = STAPSK;
-const int checkWiFiTimeout = 15; //seconds
-const int checkWiFiReconnect = 60; //minutes // reconnect after offlineMode
+#define ssid (char*) "xxxx"
+#define password (char*) "xxxx"
+#define checkWiFiTimeout (int) 15 //seconds
+#define checkWiFiReconnect (int) 60 //minutes // reconnect after offlineMode
 int onlineMode = 1;
 
 //Config ArduinoOTA
-const char* otaHostname = "OpenSA";
-const char* otaPassword = "xxxx";
+#define otaHostname (char*) "OpenSA"
+#define otaPassword (char*) "xxx"
 
 //Config MQTT
 PubSubClient mqttCore(espClient);
-int checkMqttTimeout = 15;
-const char *mqttBroker = "broker.emqx.io";
-const int mqttPort = 1883;
-const char *mqttUsername = "emqx";
-const char *mqttPassword = "public";
+#define mqttBroker (char*) "broker.emqx.io"
+#define mqttUsername (char*) "emqx"
+#define mqttPassword (char*) "public"
+#define mqttPort (int) 1883
+#define checkMqttTimeout (int) 15
+
 String MqttPrefix = String("xxx/");
+
 struct {
     const char *main = strdup(String(MqttPrefix + "s/#").c_str());
     const char *hello = strdup(String(MqttPrefix + "d/h").c_str());
@@ -41,23 +38,26 @@ struct {
     const char *relay0Start = strdup(String(MqttPrefix + "s/r/0/s").c_str());
     const char *relay0End = strdup(String(MqttPrefix + "s/r/0/e").c_str());
     const char *relay1 = strdup(String(MqttPrefix + "s/r/1").c_str());
+    const char *relay1Start = strdup(String(MqttPrefix + "s/r/1/s").c_str());
+    const char *relay1End = strdup(String(MqttPrefix + "s/r/1/e").c_str());
     const char *forceOnTimeout = strdup(String(MqttPrefix + "s/fot").c_str());
     const char *lightingMode = strdup(String(MqttPrefix + "s/lm").c_str());
     const char *lightingDianaStart = strdup(String(MqttPrefix + "s/lds").c_str());
     const char *lightingDianaDuration = strdup(String(MqttPrefix + "s/ldd").c_str());
+    const char *filterMode = strdup(String(MqttPrefix + "s/fm").c_str());
     const char *commands = strdup(String(MqttPrefix + "s/cmd").c_str());
     const char *temperatureData = strdup(String(MqttPrefix + "d/t").c_str());
     const char *temperatureInterval = strdup(String(MqttPrefix + "s/t/i").c_str());
     const char *temperatureMonitor = strdup(String(MqttPrefix + "s/t/m").c_str());
     const char *temperatureAlarm = strdup(String(MqttPrefix + "s/t/a").c_str());
-} topic;
+} const topic;
 
 
 //Config WebServer
-ESP8266WebServer server;
+// ESP8266WebServer server;
 
 //Config RELAY
-const int relays = 2;
+#define relays (int) 2
 const int pinRelay[relays] = {
     14, //relay0
     12, //relay1
@@ -80,39 +80,42 @@ NTPClient timeClient(ntpUDP);
 
 //Config RTC
 RTC_DS1307 rtc;
-char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-int myTimezone = 7;
+const char daysOfTheWeek[7][12] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+#define myTimezone (int) 7
 DateTime now = DateTime();
 
 //Config SmartBtn
 bool stateForceOn = 0;
-const int pinSmartBtn = 13;
+#define pinSmartBtn (int) 13
 OneButton smartBtn(pinSmartBtn, true);
 
 // Config Temperature DS18B20 sensor
-const int pinTemperature = 2;
+#define pinTemperature (int) 2
 OneWire wireTemperature(pinTemperature);// Setup a oneWire instance to communicate with any OneWire devices
 DallasTemperature sensorTemperature(&wireTemperature); // Pass our oneWire reference to Dallas Temperature sensor
 
 // Config Buzzer
-const int pinBuzzer = 15;
+#define pinBuzzer (int) 15
 
 //Config EEPROM
 struct dataEEPROM {
     bool relayState[relays] = {0,0};
     int relay0HoursStart = 17; // 24 hours
     int relay0HoursEnd = 23; // 24 hours
+    int relay1HoursStart = 12; // 24 hours
+    int relay1HoursEnd = 13; // 24 hours
     int test = 1;
     int checkScheduleInterval = 1; //seconds
     int forceOnTimeout = 30; //minute
     bool temperatureMonitor = true;
-    int temperatureInterval = 1; //second
+    int temperatureInterval = 60; //second
     int lightingMode = 1; // 1 : long, 2 : Diana Walstad
     int lightingDianaStart = 3; // 24 hours
     int lightingDianaDuration = 4; // hour
     int lightingDianaCountSchedule;
     int lightingDianaScheduleStart[5];
     int lightingDianaScheduleEnd[5];
+    int filterMode = 1; // 1 : alwaysOnFilter, 2 : schaduledFilter
 };
 dataEEPROM myDataEEPROM;
-const int eepromSize = 1024;
+#define eepromSize (int) sizeof(myDataEEPROM) + 8
