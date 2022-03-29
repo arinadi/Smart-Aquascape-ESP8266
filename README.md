@@ -1,4 +1,5 @@
 # Opensource Smart Aquascape
+
 ## _Next Level Aquascape Base On ESP8266_
 
 This is a Aquascape management device.
@@ -15,7 +16,7 @@ This is a Aquascape management device.
 - Auto Offline Mode
 - OTA Update
 - One Smart Button
-- Web Controll
+- ~~Web Controll~~
 - MQTT Controll
 - RTC
 - NTP
@@ -28,13 +29,17 @@ This is a Aquascape management device.
 ### Channel Configuration
 
 1. Lamp Controll
-   - Schadule (One time long lighting)
+   - Schaduled (One time long lighting)
    - [Diana Walstad](https://acquariofilia.org/english-articles/af-interviews-diana-walstad/5/) (Periodic Short Light / Low Tech Tank)
    - Force On with Timer
-2. Free Controll Any Device
+2. Filter Controll
+	- Always ON
+	- Schaduled Filter
 
 ## How To Use
+
 ### Prepare Hardware Supported
+
 - ESP8266
 - RTC DS1307
 - DS18B20 Temperature Sensor
